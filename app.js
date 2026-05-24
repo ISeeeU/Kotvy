@@ -696,15 +696,18 @@
     if(e.button===1||e.button===2||e.shiftKey){
       panning={sx:sx,sy:sy,ox:view.ox,oy:view.oy};e.preventDefault();return;
     }
-    if(mode==='select'){
-      for(var z=0;z<hits.length;z++){
-        var hz=hits[z];
-        if(sx>=hz.x&&sx<=hz.x+hz.w&&sy>=hz.y&&sy<=hz.y+hz.h){
-          if(hz.type==='len'){sel={kind:'len',idx:hz.ref};selected=-1;selWall=false;syncPanels();redraw();return;}
-          if(hz.type==='ang'){sel={kind:'ang',idx:hz.ref};selected=-1;selWall=false;syncPanels();redraw();return;}
-          if(hz.type==='chain'){openEdit(hz);return;}
+
+    for(var z=0;z<hits.length;z++){
+      var hz=hits[z];
+      if(sx>=hz.x&&sx<=hz.x+hz.w&&sy>=hz.y&&sy<=hz.y+hz.h){
+        if(hz.type==='len' || hz.type==='ang' || hz.type==='chain'){
+          openEdit(hz);
+          return;
         }
       }
+    }
+
+    if(mode==='select'){
       for(var vi=0;vi<verts.length;vi++){
         if(Math.hypot(m[0]-verts[vi].x,m[1]-verts[vi].y)<0.4){
           snapshot();drag={type:'vertex',idx:vi};return;
@@ -754,7 +757,7 @@
   planC.addEventListener('contextmenu',function(e){e.preventDefault();});
 
   planC.addEventListener('click',function(e){
-    if(mode==='select'||e.shiftKey)return;
+    if(editTarget || mode==='select' || e.shiftKey)return;
     var r=planC.getBoundingClientRect();
     var sx=(e.clientX-r.left)*planC.width/r.width;
     var sy=(e.clientY-r.top)*planC.height/r.height;
