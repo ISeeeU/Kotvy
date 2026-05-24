@@ -333,6 +333,8 @@
       pc.fillStyle='#9aa091';pc.font='10px Segoe UI';
       pc.fillText('K'+(idx+1),h[0]+7,h[1]-6);
     });
+
+    drawChainDims(verts);
   }
 
   function tAtDev(dev){
