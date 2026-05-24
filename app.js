@@ -333,34 +333,19 @@
       pc.fillStyle='#9aa091';pc.font='10px Segoe UI';
       pc.fillText('K'+(idx+1),h[0]+7,h[1]-6);
     });
-
-    drawAnchorCornerDims(verts);
   }
 
-  // Nová funkcia: kótovanie od kotvy po roh a od rohu po kotvu
-  function drawAnchorCornerDims(verts){
-    if(anchors.length<2||verts.length<2)return;
-    // zoradíme kotvy podľa devLengthV
-    var sorted = anchors.map((a,idx)=>({a,idx,dev:devLengthV(a.t)})).sort((p,q)=>p.dev-q.dev);
-    // prvá kotva po roh
-    var first = sorted[0], last = sorted[sorted.length-1];
-    var corner = verts[0];
-    var a1 = anchorGeom(first.a), a2 = anchorGeom(last.a);
-    var h1 = toScreen(a1.head[0],a1.head[1]);
-    var h2 = toScreen(a2.head[0],a2.head[1]);
-    var c = toScreen(corner.x,corner.y);
-    // Kóta od prvej kotvy po roh
-    var n1 = segNormalV(verts,0);
-    var ox1 = n1.x*view.scale*0.7, oy1 = n1.y*view.scale*0.7;
-    dimArrows(h1[0]+ox1,h1[1]+oy1,c[0]+ox1,c[1]+oy1,'#4fb98a',false);
-    dimText((h1[0]+c[0])/2+ox1,(h1[1]+c[1])/2+oy1,
-      Math.abs(devLengthV(first.a.t)-0).toFixed(2), '#4fb98a', 'anchor-corner-1', {a:first.idx}, false);
-    // Kóta od rohu po druhú kotvu
-    var n2 = segNormalV(verts,0);
-    var ox2 = n2.x*view.scale*1.2, oy2 = n2.y*view.scale*1.2;
-    dimArrows(c[0]+ox2,c[1]+oy2,h2[0]+ox2,h2[1]+oy2,'#4fb98a',false);
-    dimText((c[0]+h2[0])/2+ox2,(c[1]+h2[1])/2+oy2,
-      Math.abs(devLengthV(last.a.t)-0).toFixed(2), '#4fb98a', 'anchor-corner-2', {a:last.idx}, false);
+  function tAtDev(dev){
+    var acc=0;
+    for(var i=0;i<wall.segs.length;i++){
+      var L=wall.segs[i].len;
+      if(dev<=acc+L+1e-9 || i===wall.segs.length-1){
+        if(L<=1e-9) return i;
+        return i+(dev-acc)/L;
+      }
+      acc+=L;
+    }
+    return wall.segs.length-1;
   }
 
   function drawChainDims(verts){
@@ -375,15 +360,28 @@
       ids.sort(function(p,q){return devLengthV(anchors[p].t)-devLengthV(anchors[q].t);});
       for(var m=0;m<ids.length-1;m++){
         var a1=anchors[ids[m]],a2=anchors[ids[m+1]];
-        var d=Math.abs(devLengthV(a2.t)-devLengthV(a1.t));
-        var w1=wallPointAtV(verts,a1.t),w2=wallPointAtV(verts,a2.t);
-        var s1=toScreen(w1.x,w1.y),s2=toScreen(w2.x,w2.y);
-        var i1=wallSegIndex(a1.t),n=segNormalV(verts,i1);
-        var refSide=(a1.side||1);
-        var ox=n.x*view.scale*0.55*refSide,oy=n.y*view.scale*0.55*refSide;
-        dimArrows(s1[0]+ox,s1[1]+oy,s2[0]+ox,s2[1]+oy,'#4fb98a',false);
-        dimText((s1[0]+s2[0])/2+ox,(s1[1]+s2[1])/2+oy,d.toFixed(2),'#4fb98a',
-                'chain',{a:ids[m],b:ids[m+1]},false);
+        var d1=devLengthV(a1.t), d2=devLengthV(a2.t);
+        var start=Math.min(d1,d2), end=Math.max(d1,d2);
+        var corners=[];
+        var acc=0;
+        for(var i=0;i<wall.segs.length;i++){
+          acc+=wall.segs[i].len;
+          if(acc>start+1e-9 && acc<end-1e-9) corners.push(acc);
+        }
+        var points=[start].concat(corners,[end]);
+        for(var p=0;p<points.length-1;p++){
+          var segStart=points[p], segEnd=points[p+1];
+          var tStart=tAtDev(segStart), tEnd=tAtDev(segEnd);
+          var w1=wallPointAtV(verts,tStart), w2=wallPointAtV(verts,tEnd);
+          var s1=toScreen(w1.x,w1.y), s2=toScreen(w2.x,w2.y);
+          var i1=wallSegIndex(tStart), n=segNormalV(verts,i1);
+          var refSide=(a1.side||1);
+          var ox=n.x*view.scale*0.55*refSide, oy=n.y*view.scale*0.55*refSide;
+          var d=(segEnd-segStart).toFixed(2);
+          dimArrows(s1[0]+ox,s1[1]+oy,s2[0]+ox,s2[1]+oy,'#4fb98a',false);
+          dimText((s1[0]+s2[0])/2+ox,(s1[1]+s2[1])/2+oy,d,'#4fb98a',
+                  'chain',{a:ids[m],b:ids[m+1]},false);
+        }
       }
     });
   }
