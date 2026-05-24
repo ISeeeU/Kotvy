@@ -11,7 +11,8 @@
          *Lock    = či je parameter zamknutý
      Vrcholy sa dopočítajú funkciou vertices().
      ==================================================================== */
-  var wall={origin:{x:0,y:0}, startDir:0, segs:[]};
+  // Wall starts empty, first click sets origin
+  var wall={origin:null, startDir:0, segs:[]};
   var anchors=[];
   var mode='wall', selected=-1, selWall=false, sel=null; // sel = {kind:'len'|'ang', idx}
   var view={ox:60,oy:60,scale:22};
@@ -36,6 +37,7 @@
 
   /* ---------- parametrická stena → vrcholy ---------- */
   function vertices(){
+    if (!wall.origin) return [];
     var pts=[{x:wall.origin.x,y:wall.origin.y}];
     var dir=wall.startDir;
     for(var i=0;i<wall.segs.length;i++){
@@ -59,7 +61,8 @@
 
   /* prepočet parametrov z vrcholov (po ťahaní vrcholu) */
   function rebuildFromVertices(pts){
-    if(pts.length<2){wall.segs=[]; wall.origin={x:pts[0]?pts[0].x:0,y:pts[0]?pts[0].y:0}; return;}
+    if(pts.length<1){ wall.segs=[]; wall.origin=null; return; }
+    if(pts.length===1){ wall.segs=[]; wall.origin={x:pts[0].x, y:pts[0].y}; return; }
     wall.origin={x:pts[0].x,y:pts[0].y};
     var dir0=Math.atan2(pts[1].y-pts[0].y,pts[1].x-pts[0].x);
     wall.startDir=dir0;
@@ -252,56 +255,61 @@
     var coll=collisions(),bad={};
     coll.forEach(function(c){if(c.sev<0){bad[c.i]=1;bad[c.j]=1;}});
 
-    if(verts.length>1){
-      for(var i=0;i<verts.length-1;i++){
-        var refSide=1;
-        for(var ai=0;ai<anchors.length;ai++){
-          if(wallSegIndex(anchors[ai].t)===i){refSide=anchors[ai].side||1;break;}
+    // Draw wall segments and points
+    if(verts.length>0){
+      if(verts.length>1){
+        for(var i=0;i<verts.length-1;i++){
+          var refSide=1;
+          for(var ai=0;ai<anchors.length;ai++){
+            if(wallSegIndex(anchors[ai].t)===i){refSide=anchors[ai].side||1;break;}
+          }
+          var n=segNormalV(verts,i);
+          var p=toScreen(verts[i].x,verts[i].y),q=toScreen(verts[i+1].x,verts[i+1].y);
+          var off=view.scale*1.3*refSide;
+          pc.fillStyle='rgba(111,123,214,0.10)';
+          pc.beginPath();
+          pc.moveTo(p[0],p[1]);pc.lineTo(q[0],q[1]);
+          pc.lineTo(q[0]+n.x*off,q[1]+n.y*off);
+          pc.lineTo(p[0]+n.x*off,p[1]+n.y*off);
+          pc.closePath();pc.fill();
         }
-        var n=segNormalV(verts,i);
-        var p=toScreen(verts[i].x,verts[i].y),q=toScreen(verts[i+1].x,verts[i+1].y);
-        var off=view.scale*1.3*refSide;
-        pc.fillStyle='rgba(111,123,214,0.10)';
-        pc.beginPath();
-        pc.moveTo(p[0],p[1]);pc.lineTo(q[0],q[1]);
-        pc.lineTo(q[0]+n.x*off,q[1]+n.y*off);
-        pc.lineTo(p[0]+n.x*off,p[1]+n.y*off);
-        pc.closePath();pc.fill();
-      }
-      for(var i=0;i<verts.length-1;i++){
-        var p=toScreen(verts[i].x,verts[i].y),q=toScreen(verts[i+1].x,verts[i+1].y);
-        var isSel=sel&&sel.kind==='len'&&sel.idx===i;
-        pc.strokeStyle=isSel?'#c6d44a':'#6f7bd6';
-        pc.lineWidth=isSel?5:3;
-        pc.beginPath();pc.moveTo(p[0],p[1]);pc.lineTo(q[0],q[1]);pc.stroke();
+        for(var i=0;i<verts.length-1;i++){
+          var p=toScreen(verts[i].x,verts[i].y),q=toScreen(verts[i+1].x,verts[i+1].y);
+          var isSel=sel&&sel.kind==='len'&&sel.idx===i;
+          pc.strokeStyle=isSel?'#c6d44a':'#6f7bd6';
+          pc.lineWidth=isSel?5:3;
+          pc.beginPath();pc.moveTo(p[0],p[1]);pc.lineTo(q[0],q[1]);pc.stroke();
+        }
       }
       verts.forEach(function(pt){
         var s=toScreen(pt.x,pt.y);
         pc.fillStyle='#6f7bd6';
         pc.beginPath();pc.arc(s[0],s[1],4,0,7);pc.fill();
       });
-
-      for(var i=0;i<verts.length-1;i++){
-        var n=segNormalV(verts,i);
-        var p=toScreen(verts[i].x,verts[i].y),q=toScreen(verts[i+1].x,verts[i+1].y);
-        var ox=-n.x*20,oy=-n.y*20;
-        var isSel=sel&&sel.kind==='len'&&sel.idx===i;
-        dimArrows(p[0]+ox,p[1]+oy,q[0]+ox,q[1]+oy,isSel?'#c6d44a':'#5c9fd6',isSel);
-        dimText((p[0]+q[0])/2+ox,(p[1]+q[1])/2+oy,
-                wall.segs[i].len.toFixed(2)+' m',
-                isSel?'#c6d44a':'#5c9fd6','len',i,wall.segs[i].lenLock);
-      }
-      for(var c=1;c<verts.length-1;c++){
-        var s=toScreen(verts[c].x,verts[c].y);
-        var v1=segVecV(verts,c-1),v2=segVecV(verts,c);
-        var isSel=sel&&sel.kind==='ang'&&sel.idx===c;
-        pc.strokeStyle=isSel?'#c6d44a':'#b07fd6';
-        pc.lineWidth=isSel?2.6:1.2;
-        pc.beginPath();
-        pc.arc(s[0],s[1],15,Math.atan2(-v1.y,-v1.x),Math.atan2(v2.y,v2.x));
-        pc.stroke();
-        dimText(s[0]+20,s[1]-17,wall.segs[c].ang.toFixed(0)+'°',
-                isSel?'#c6d44a':'#b07fd6','ang',c,wall.segs[c].angLock);
+      // Segment dimensions
+      if(verts.length>1){
+        for(var i=0;i<verts.length-1;i++){
+          var n=segNormalV(verts,i);
+          var p=toScreen(verts[i].x,verts[i].y),q=toScreen(verts[i+1].x,verts[i+1].y);
+          var ox=-n.x*20,oy=-n.y*20;
+          var isSel=sel&&sel.kind==='len'&&sel.idx===i;
+          dimArrows(p[0]+ox,p[1]+oy,q[0]+ox,q[1]+oy,isSel?'#c6d44a':'#5c9fd6',isSel);
+          dimText((p[0]+q[0])/2+ox,(p[1]+q[1])/2+oy,
+                  wall.segs[i].len.toFixed(2)+' m',
+                  isSel?'#c6d44a':'#5c9fd6','len',i,wall.segs[i].lenLock);
+        }
+        for(var c=1;c<verts.length-1;c++){
+          var s=toScreen(verts[c].x,verts[c].y);
+          var v1=segVecV(verts,c-1),v2=segVecV(verts,c);
+          var isSel=sel&&sel.kind==='ang'&&sel.idx===c;
+          pc.strokeStyle=isSel?'#c6d44a':'#b07fd6';
+          pc.lineWidth=isSel?2.6:1.2;
+          pc.beginPath();
+          pc.arc(s[0],s[1],15,Math.atan2(-v1.y,-v1.x),Math.atan2(v2.y,v2.x));
+          pc.stroke();
+          dimText(s[0]+20,s[1]-17,wall.segs[c].ang.toFixed(0)+'°',
+                  isSel?'#c6d44a':'#b07fd6','ang',c,wall.segs[c].angLock);
+        }
       }
     }
 
@@ -326,7 +334,33 @@
       pc.fillText('K'+(idx+1),h[0]+7,h[1]-6);
     });
 
-    drawChainDims(verts);
+    drawAnchorCornerDims(verts);
+  }
+
+  // Nová funkcia: kótovanie od kotvy po roh a od rohu po kotvu
+  function drawAnchorCornerDims(verts){
+    if(anchors.length<2||verts.length<2)return;
+    // zoradíme kotvy podľa devLengthV
+    var sorted = anchors.map((a,idx)=>({a,idx,dev:devLengthV(a.t)})).sort((p,q)=>p.dev-q.dev);
+    // prvá kotva po roh
+    var first = sorted[0], last = sorted[sorted.length-1];
+    var corner = verts[0];
+    var a1 = anchorGeom(first.a), a2 = anchorGeom(last.a);
+    var h1 = toScreen(a1.head[0],a1.head[1]);
+    var h2 = toScreen(a2.head[0],a2.head[1]);
+    var c = toScreen(corner.x,corner.y);
+    // Kóta od prvej kotvy po roh
+    var n1 = segNormalV(verts,0);
+    var ox1 = n1.x*view.scale*0.7, oy1 = n1.y*view.scale*0.7;
+    dimArrows(h1[0]+ox1,h1[1]+oy1,c[0]+ox1,c[1]+oy1,'#4fb98a',false);
+    dimText((h1[0]+c[0])/2+ox1,(h1[1]+c[1])/2+oy1,
+      Math.abs(devLengthV(first.a.t)-0).toFixed(2), '#4fb98a', 'anchor-corner-1', {a:first.idx}, false);
+    // Kóta od rohu po druhú kotvu
+    var n2 = segNormalV(verts,0);
+    var ox2 = n2.x*view.scale*1.2, oy2 = n2.y*view.scale*1.2;
+    dimArrows(c[0]+ox2,c[1]+oy2,h2[0]+ox2,h2[1]+oy2,'#4fb98a',false);
+    dimText((c[0]+h2[0])/2+ox2,(c[1]+h2[1])/2+oy2,
+      Math.abs(devLengthV(last.a.t)-0).toFixed(2), '#4fb98a', 'anchor-corner-2', {a:last.idx}, false);
   }
 
   function drawChainDims(verts){
@@ -684,8 +718,13 @@
     if(mode==='wall'){
       snapshot();
       var verts=vertices();
-      verts.push({x:Math.round(m[0]*4)/4,y:Math.round(m[1]*4)/4});
-      rebuildFromVertices(verts);
+      if (!wall.origin) {
+        // Prvý bod
+        rebuildFromVertices([{x:Math.round(m[0]*4)/4, y:Math.round(m[1]*4)/4}]);
+      } else {
+        verts.push({x:Math.round(m[0]*4)/4,y:Math.round(m[1]*4)/4});
+        rebuildFromVertices(verts);
+      }
     }else if(mode==='anchor'){
       var verts=vertices();
       if(verts.length<2){flash('Najprv nakresli aspoň dvojbodovú stenu.');return;}

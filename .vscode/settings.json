@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^git -C \"c:/Users/PC/Desktop/Kríženie kotiev\" push -u origin master$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}
