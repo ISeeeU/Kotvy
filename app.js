@@ -61,8 +61,9 @@
 
   /* prepočet parametrov z vrcholov (po ťahaní vrcholu) */
   function rebuildFromVertices(pts){
-    if(pts.length<1){ wall.segs=[]; wall.origin=null; return; }
-    if(pts.length===1){ wall.segs=[]; wall.origin={x:pts[0].x, y:pts[0].y}; return; }
+    captureLockedAnchorPositions();
+    if(pts.length<1){ wall.segs=[]; wall.origin=null; restoreLockedAnchorPositions(); return; }
+    if(pts.length===1){ wall.segs=[]; wall.origin={x:pts[0].x, y:pts[0].y}; restoreLockedAnchorPositions(); return; }
     wall.origin={x:pts[0].x,y:pts[0].y};
     var dir0=Math.atan2(pts[1].y-pts[0].y,pts[1].x-pts[0].x);
     wall.startDir=dir0;
@@ -83,6 +84,7 @@
       newSegs.push(seg);
     }
     wall.segs=newSegs;
+    restoreLockedAnchorPositions();
   }
 
   /* ---------- geometria pomocná ---------- */
@@ -183,13 +185,36 @@
      Pri ŤAHANÍ vrcholu sa naopak zamknuté parametre musia zachovať:
      zamknutú dĺžku/uhol po ťahaní vrátime na pôvodnú hodnotu.
      ==================================================================== */
+  function captureLockedAnchorPositions(){
+    var verts=vertices();
+    if(verts.length<2) return;
+    anchors.forEach(function(a){
+      if(a.lock){
+        a._lockedPos=wallPointAtV(verts,a.t);
+      }
+    });
+  }
+  function restoreLockedAnchorPositions(){
+    var verts=vertices();
+    if(verts.length<2) return;
+    anchors.forEach(function(a){
+      if(a.lock && a._lockedPos){
+        a.t=nearestT(verts,a._lockedPos.x,a._lockedPos.y).t;
+        a.side=sideAt(verts,a.t,a._lockedPos.x,a._lockedPos.y);
+      }
+    });
+  }
   function setSegLen(i,newL){
     if(newL<=0.05||!wall.segs[i])return;
+    captureLockedAnchorPositions();
     wall.segs[i].len=newL;
+    restoreLockedAnchorPositions();
   }
   function setSegAngle(i,newDeg){
     if(!wall.segs[i]||i===0)return;
+    captureLockedAnchorPositions();
     wall.segs[i].ang=newDeg;
+    restoreLockedAnchorPositions();
   }
   function toggleLock(kind,idx){
     if(kind==='len') wall.segs[idx].lenLock=!wall.segs[idx].lenLock;
@@ -335,6 +360,7 @@
     });
 
     drawChainDims(verts);
+    drawAnchorEdgeDims(verts);
   }
 
   function tAtDev(dev){
@@ -401,34 +427,36 @@
           }
         }
       }
-      // Rozdelenie cez rohy (voliteľné, ak chceš aj túto logiku zachovať)
-      /*
-      for(var m=0;m<ids.length-1;m++){
-        var a1=anchors[ids[m]],a2=anchors[ids[m+1]];
-        var d1=devLengthV(a1.t), d2=devLengthV(a2.t);
-        var start=Math.min(d1,d2), end=Math.max(d1,d2);
-        var corners=[];
-        var acc=0;
-        for(var i=0;i<wall.segs.length;i++){
-          acc+=wall.segs[i].len;
-          if(acc>start+1e-9 && acc<end-1e-9) corners.push(acc);
-        }
-        var points=[start].concat(corners,[end]);
-        for(var p=0;p<points.length-1;p++){
-          var segStart=points[p], segEnd=points[p+1];
-          var tStart=tAtDev(segStart), tEnd=tAtDev(segEnd);
-          var w1=wallPointAtV(verts,tStart), w2=wallPointAtV(verts,tEnd);
-          var s1=toScreen(w1.x,w1.y), s2=toScreen(w2.x,w2.y);
-          var i1=wallSegIndex(tStart), n=segNormalV(verts,i1);
-          var refSide=(a1.side||1);
-          var ox=n.x*view.scale*0.55*refSide, oy=n.y*view.scale*0.55*refSide;
-          var d=(segEnd-segStart).toFixed(2);
-          dimArrows(s1[0]+ox,s1[1]+oy,s2[0]+ox,s2[1]+oy,'#4fb98a',false);
-          dimText((s1[0]+s2[0])/2+ox,(s1[1]+s2[1])/2+oy,d,'#4fb98a',
-                  'chain',{a:ids[m],b:ids[m+1]},false);
-        }
+    });
+  }
+
+  function drawAnchorEdgeDims(verts){
+    if(anchors.length===0||verts.length<2)return;
+    var total=totalWallLen();
+    anchors.forEach(function(a){
+      var dev=devLengthV(a.t);
+      var edgeDev=dev<=(total/2)?0:total;
+      var start=Math.min(dev,edgeDev), end=Math.max(dev,edgeDev);
+      if(Math.abs(end-start)<0.02) return;
+      var corners=[];
+      var acc=0;
+      for(var i=0;i<wall.segs.length-1;i++){
+        acc+=wall.segs[i].len;
+        if(acc>start+1e-9 && acc<end-1e-9) corners.push(acc);
       }
-      */
+      var points=[start].concat(corners,[end]);
+      for(var p=0;p<points.length-1;p++){
+        var segStart=points[p], segEnd=points[p+1];
+        var tStart=tAtDev(segStart), tEnd=tAtDev(segEnd);
+        var w1=wallPointAtV(verts,tStart), w2=wallPointAtV(verts,tEnd);
+        var s1=toScreen(w1.x,w1.y), s2=toScreen(w2.x,w2.y);
+        var i1=wallSegIndex(tStart), n=segNormalV(verts,i1);
+        var refSide=(a.side||1);
+        var ox=n.x*view.scale*0.55*refSide, oy=n.y*view.scale*0.55*refSide;
+        var d=(segEnd-segStart).toFixed(2);
+        dimArrows(s1[0]+ox,s1[1]+oy,s2[0]+ox,s2[1]+oy,'#4fb98a',false);
+        dimText((s1[0]+s2[0])/2+ox,(s1[1]+s2[1])/2+oy,d,'#4fb98a','edge',null,false);
+      }
     });
   }
 
@@ -593,6 +621,7 @@
       document.getElementById('apDiaFree').value=dims.freeDia;
       document.getElementById('apDiaBond').value=dims.bondDia;
       document.getElementById('apZ').value=a.z;
+      document.getElementById('apLock').textContent=a.lock?'🔒 zamknutá':'🔓 voľná';
     }else{
       ap.style.display='none';
     }
@@ -638,6 +667,7 @@
     setAnchorDev(idB,baseDev+dir*newD);
   }
   function setAnchorDev(idx,targetDev){
+    if(anchors[idx]&&anchors[idx].lock) return;
     var total=totalWallLen();
     targetDev=Math.max(0,Math.min(total,targetDev));
     var acc=0;
@@ -720,7 +750,13 @@
         if(d<bd){bd=d;ba=idx;}
       });
       if(ba>=0&&bd<0.5){
-        selected=ba;sel=null;selWall=false;snapshot();
+        selected=ba;sel=null;selWall=false;
+        syncPanels();
+        if(anchors[ba].lock){
+          redraw();
+          return;
+        }
+        snapshot();
         drag={type:'anchor',idx:ba};syncPanels();redraw();return;
       }
       var pa=pickAngle(verts,m[0],m[1]);
@@ -779,7 +815,8 @@
       snapshot();
       anchors.push({t:nt.t,z:-2,incline:20,skew:0,free:8,bond:6,dia:150,
                     freeDia:150,bondDia:150,
-                    side:sideAt(verts,nt.t,m[0],m[1])});
+                    side:sideAt(verts,nt.t,m[0],m[1]),
+                    lock:false});
       selected=anchors.length-1;sel=null;syncPanels();
     }
     redraw();
@@ -828,6 +865,15 @@
   document.getElementById('apDiaBond').addEventListener('input',function(){
     if(selected<0)return;
     anchors[selected].bondDia=parseFloat(this.value)||0;redraw();
+  });
+  document.getElementById('apLock').addEventListener('click',function(){
+    if(selected<0)return;
+    snapshot();
+    anchors[selected].lock=!anchors[selected].lock;
+    if(anchors[selected].lock){
+      anchors[selected]._lockedPos=wallPointAtV(vertices(),anchors[selected].t);
+    }
+    syncPanels();redraw();
   });
   document.getElementById('apFlip').addEventListener('click',function(){
     if(selected<0)return;snapshot();
