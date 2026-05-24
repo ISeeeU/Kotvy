@@ -360,18 +360,46 @@
     Object.keys(rows).forEach(function(key){
       var ids=rows[key];
       ids.sort(function(p,q){return devLengthV(anchors[p].t)-devLengthV(anchors[q].t);});
-      // Klasické reťazové kóty medzi každou dvojicou kotiev
+      // Kóty medzi kotvami rozdelené cez rohy
       for(var m=0;m<ids.length-1;m++){
         var a1=anchors[ids[m]],a2=anchors[ids[m+1]];
-        var d=Math.abs(devLengthV(a2.t)-devLengthV(a1.t));
-        var w1=wallPointAtV(verts,a1.t),w2=wallPointAtV(verts,a2.t);
-        var s1=toScreen(w1.x,w1.y),s2=toScreen(w2.x,w2.y);
-        var i1=wallSegIndex(a1.t),n=segNormalV(verts,i1);
-        var refSide=(a1.side||1);
-        var ox=n.x*view.scale*0.55*refSide,oy=n.y*view.scale*0.55*refSide;
-        dimArrows(s1[0]+ox,s1[1]+oy,s2[0]+ox,s2[1]+oy,'#4fb98a',false);
-        dimText((s1[0]+s2[0])/2+ox,(s1[1]+s2[1])/2+oy,d.toFixed(2),'#4fb98a',
-                'chain',{a:ids[m],b:ids[m+1]},false);
+        var d1=devLengthV(a1.t), d2=devLengthV(a2.t);
+        var start=Math.min(d1,d2), end=Math.max(d1,d2);
+        var corners=[];
+        var acc=0;
+        for(var i=0;i<wall.segs.length-1;i++){
+          acc+=wall.segs[i].len;
+          // Ak roh leží medzi kotvami
+          if(acc>start+1e-9 && acc<end-1e-9) corners.push(acc);
+        }
+        if(corners.length===0){
+          // Klasická kóta medzi kotvami
+          var w1=wallPointAtV(verts,a1.t),w2=wallPointAtV(verts,a2.t);
+          var s1=toScreen(w1.x,w1.y),s2=toScreen(w2.x,w2.y);
+          var i1=wallSegIndex(a1.t),n=segNormalV(verts,i1);
+          var refSide=(a1.side||1);
+          var ox=n.x*view.scale*0.55*refSide,oy=n.y*view.scale*0.55*refSide;
+          var d=Math.abs(end-start);
+          dimArrows(s1[0]+ox,s1[1]+oy,s2[0]+ox,s2[1]+oy,'#4fb98a',false);
+          dimText((s1[0]+s2[0])/2+ox,(s1[1]+s2[1])/2+oy,d.toFixed(2),'#4fb98a',
+                  'chain',{a:ids[m],b:ids[m+1]},false);
+        } else {
+          // Rozdelené na dve kóty cez roh
+          var points=[start].concat(corners,[end]);
+          for(var p=0;p<points.length-1;p++){
+            var segStart=points[p], segEnd=points[p+1];
+            var tStart=tAtDev(segStart), tEnd=tAtDev(segEnd);
+            var w1=wallPointAtV(verts,tStart), w2=wallPointAtV(verts,tEnd);
+            var s1=toScreen(w1.x,w1.y), s2=toScreen(w2.x,w2.y);
+            var i1=wallSegIndex(tStart), n=segNormalV(verts,i1);
+            var refSide=(a1.side||1);
+            var ox=n.x*view.scale*0.55*refSide, oy=n.y*view.scale*0.55*refSide;
+            var d=(segEnd-segStart).toFixed(2);
+            dimArrows(s1[0]+ox,s1[1]+oy,s2[0]+ox,s2[1]+oy,'#4fb98a',false);
+            dimText((s1[0]+s2[0])/2+ox,(s1[1]+s2[1])/2+oy,d,'#4fb98a',
+                    'chain',{a:ids[m],b:ids[m+1]},false);
+          }
+        }
       }
       // Rozdelenie cez rohy (voliteľné, ak chceš aj túto logiku zachovať)
       /*
