@@ -358,6 +358,21 @@
     Object.keys(rows).forEach(function(key){
       var ids=rows[key];
       ids.sort(function(p,q){return devLengthV(anchors[p].t)-devLengthV(anchors[q].t);});
+      // Klasické reťazové kóty medzi každou dvojicou kotiev
+      for(var m=0;m<ids.length-1;m++){
+        var a1=anchors[ids[m]],a2=anchors[ids[m+1]];
+        var d=Math.abs(devLengthV(a2.t)-devLengthV(a1.t));
+        var w1=wallPointAtV(verts,a1.t),w2=wallPointAtV(verts,a2.t);
+        var s1=toScreen(w1.x,w1.y),s2=toScreen(w2.x,w2.y);
+        var i1=wallSegIndex(a1.t),n=segNormalV(verts,i1);
+        var refSide=(a1.side||1);
+        var ox=n.x*view.scale*0.55*refSide,oy=n.y*view.scale*0.55*refSide;
+        dimArrows(s1[0]+ox,s1[1]+oy,s2[0]+ox,s2[1]+oy,'#4fb98a',false);
+        dimText((s1[0]+s2[0])/2+ox,(s1[1]+s2[1])/2+oy,d.toFixed(2),'#4fb98a',
+                'chain',{a:ids[m],b:ids[m+1]},false);
+      }
+      // Rozdelenie cez rohy (voliteľné, ak chceš aj túto logiku zachovať)
+      /*
       for(var m=0;m<ids.length-1;m++){
         var a1=anchors[ids[m]],a2=anchors[ids[m+1]];
         var d1=devLengthV(a1.t), d2=devLengthV(a2.t);
@@ -383,6 +398,7 @@
                   'chain',{a:ids[m],b:ids[m+1]},false);
         }
       }
+      */
     });
   }
 
